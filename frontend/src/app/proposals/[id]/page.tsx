@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { VoteButton } from "@/components/VoteButton";
-import { useGovernance } from "@/hooks/useGovernance";
-import type { GovernanceProposal } from "@/lib/contractData";
-import { toast } from "react-hot-toast";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export default function ProposalDetailPage({
   params,
@@ -102,9 +100,7 @@ export default function ProposalDetailPage({
               <h1 className="text-2xl font-bold text-white">
                 {proposal?.title ?? `Proposal #${params.id}`}
               </h1>
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-900/50 text-green-400 border border-green-700 capitalize">
-                {proposal?.status ?? "Loading"}
-              </span>
+              <StatusBadge status="Active" size="md" />
             </div>
             <p className="text-gray-400 mt-2">{proposal?.description ?? "Loading proposal details..."}</p>
             {proposal ? (
