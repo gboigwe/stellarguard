@@ -34,8 +34,8 @@ export default function TreasuryPage() {
   const [confirmExecuteTxId, setConfirmExecuteTxId] = useState<number | null>(null);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "executed">(
-    "all",
+  const [statusFilter, setStatusFilter] = useState<"pending" | "ready" | "executed">(
+    "pending",
   );
 
   const pendingTxs = useMemo(
@@ -46,12 +46,14 @@ export default function TreasuryPage() {
   const filteredTransactions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return transactions.filter((transaction) => {
-      const statusMatches =
-        statusFilter === "all"
-          ? true
-          : statusFilter === "executed"
-            ? transaction.executed
-            : !transaction.executed;
+      let statusMatches = false;
+      if (statusFilter === "executed") {
+        statusMatches = transaction.executed;
+      } else if (statusFilter === "ready") {
+        statusMatches = !transaction.executed && transaction.approvals.length >= threshold;
+      } else if (statusFilter === "pending") {
+        statusMatches = !transaction.executed && transaction.approvals.length < threshold;
+      }
       if (!statusMatches) {
         return false;
       }
@@ -63,11 +65,10 @@ export default function TreasuryPage() {
         transaction.to.toLowerCase().includes(q) ||
         transaction.approvals.some((approver) =>
           approver.toLowerCase().includes(q),
-        ) ||
-        (transaction.executed ? "executed" : "pending").includes(q)
+        )
       );
     });
-  }, [transactions, searchQuery, statusFilter]);
+  }, [transactions, searchQuery, statusFilter, threshold]);
 
   const filteredHistoryTxs = useMemo(
     () => filteredTransactions.filter((transaction) => transaction.executed),
@@ -168,14 +169,14 @@ export default function TreasuryPage() {
             value={statusFilter}
             onChange={(event) =>
               setStatusFilter(
-                event.target.value as "all" | "pending" | "executed",
+                event.target.value as "pending" | "ready" | "executed",
               )
             }
             className="w-full rounded-lg border border-stellar-border bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-primary-500"
           >
-            <option value="all">All statuses</option>
-            <option value="pending">Pending only</option>
-            <option value="executed">Executed only</option>
+            <option value="pending">Pending Approval</option>
+            <option value="ready">Ready to Execute</option>
+            <option value="executed">Executed</option>
           </select>
           <div className="text-xs text-gray-400 flex items-center md:justify-end">
             {filteredTransactions.length} matching transaction

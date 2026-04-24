@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ProposalCard } from "@/components/ProposalCard";
+import { CreateProposalModal } from "@/components/CreateProposalModal";
 import { useGovernance } from "@/hooks/useGovernance";
 import type {
   GovernanceProposal,
@@ -55,11 +56,13 @@ function sortProposals(proposals: GovernanceProposal[], sort: SortKey): Governan
 }
 
 export default function GovernancePage() {
-  const { config, getConfig, getProposal, isLoading, error } = useGovernance();
+  const { config, getConfig, getProposal, isLoading, error, createProposal } = useGovernance();
   const [proposals, setProposals] = useState<GovernanceProposal[]>([]);
   const [statusFilter, setStatusFilter] = useState<"All" | GovernanceProposalStatus>("All");
   const [actionFilter, setActionFilter] = useState<"All" | GovernanceProposalAction>("All");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -103,6 +106,33 @@ export default function GovernancePage() {
   const activeProposals = filteredProposals.filter((p) => p.status === "Active");
   const pastProposals = filteredProposals.filter((p) => p.status !== "Active");
 
+  const handleCreateProposal = async (data: {
+    title: string;
+    description: string;
+    action: GovernanceProposalAction;
+    target: string;
+    amount: bigint;
+  }) => {
+    setIsCreating(true);
+    try {
+      await createProposal(
+        data.title,
+        data.description,
+        data.action,
+        Number(data.amount),
+        data.target,
+      );
+      const cfg = await getConfig();
+      const count = cfg?.proposalCount ?? 0;
+      if (count > 0) {
+        const proposal = await getProposal(count);
+        setProposals((prev) => [proposal, ...prev]);
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
@@ -112,7 +142,12 @@ export default function GovernancePage() {
             Create and vote on proposals for your organization
           </p>
         </div>
-        <button className="btn-primary">+ New Proposal</button>
+        <button
+          className="btn-primary"
+          onClick={() => setShowCreateModal(true)}
+        >
+          + New Proposal
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -207,6 +242,13 @@ export default function GovernancePage() {
           )}
         </div>
       </div>
+
+      <CreateProposalModal
+        isOpen={showCreateModal}
+        isCreating={isCreating}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={handleCreateProposal}
+      />
     </div>
   );
 }
