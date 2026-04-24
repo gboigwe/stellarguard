@@ -23,7 +23,6 @@ export default function Home() {
       </section>
 
       {/* Stats Grid */}
-      {/* TODO: [FE-11] Implement real balance display with Soroban data */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="card text-center">
           <p className="text-sm text-gray-400 uppercase tracking-wide">
@@ -46,6 +45,13 @@ export default function Home() {
           <p className="text-3xl font-bold text-white mt-2">—</p>
           <p className="text-xs text-gray-500 mt-1">Connect wallet to view</p>
         </div>
+      </section>
+
+      {/* Empty State for When No Data is Available */}
+      <section className="card border border-stellar-border/50 bg-gradient-to-br from-gray-900/50 to-gray-800/50 text-center py-12">
+        <p className="text-gray-400 text-sm">
+          No treasury or proposal data available. Connect your wallet and navigate to Treasury or Governance to get started.
+        </p>
       </section>
 
       {/* Features */}
