@@ -1,5 +1,12 @@
 const STROOPS_PER_XLM = BigInt(10_000_000);
 
+// Stellar's hard-coded maximum supply: 100 billion XLM in stroops.
+const MAX_STROOPS = BigInt(100_000_000_000) * STROOPS_PER_XLM;
+
+// Maximum digits accepted in an XLM whole-number part before conversion,
+// sized to prevent BigInt construction from arbitrarily long user strings.
+const MAX_XLM_WHOLE_DIGITS = 12;
+
 type StroopsInput = bigint | number | string;
 
 export interface XlmFormatOptions {
@@ -30,7 +37,18 @@ function normalizeStroops(value: StroopsInput): bigint {
     throw new Error("Stroops value must be an integer string.");
   }
 
-  return BigInt(normalized);
+  // Reject strings long enough to produce a value that can never be valid
+  // stroops, guarding against intentional or accidental BigInt overflow.
+  if (normalized.replace("-", "").length > MAX_XLM_WHOLE_DIGITS + 7) {
+    throw new Error("Stroops value is out of the valid Stellar range.");
+  }
+
+  const result = BigInt(normalized);
+  if (result > MAX_STROOPS || result < -MAX_STROOPS) {
+    throw new Error("Stroops value is out of the valid Stellar range.");
+  }
+
+  return result;
 }
 
 export function formatXlm(
@@ -89,17 +107,78 @@ export function formatAddress(
 
 export function parseXlmToStroops(value: string): bigint {
   const normalized = value.trim();
+
+  if (
+    normalized === "" ||
+    normalized === "." ||
+    normalized.toLowerCase().includes("e") ||
+    normalized.toLowerCase() === "infinity" ||
+    normalized.toLowerCase() === "-infinity" ||
+    normalized.toLowerCase() === "nan"
+  ) {
+    throw new Error("Invalid XLM amount format. Use up to 7 decimal places.");
+  }
+
   if (!/^-?\d+(?:\.\d{1,7})?$/.test(normalized)) {
     throw new Error("Invalid XLM amount format. Use up to 7 decimal places.");
   }
 
   const [wholePart = "0", fractionPart = ""] = normalized.split(".");
+  const absWhole = wholePart.replace("-", "");
+
+  if (absWhole.length > MAX_XLM_WHOLE_DIGITS) {
+    throw new Error("XLM amount exceeds the maximum Stellar supply.");
+  }
+
   const sign = wholePart.startsWith("-") ? BigInt(-1) : BigInt(1);
-  const whole = BigInt(wholePart.replace("-", ""));
+  const whole = BigInt(absWhole);
   const fraction = fractionPart.padEnd(7, "0").slice(0, 7);
   const stroops = whole * STROOPS_PER_XLM + BigInt(fraction);
 
+  if (stroops > MAX_STROOPS) {
+    throw new Error("XLM amount exceeds the maximum Stellar supply.");
+  }
+
   return stroops * sign;
+}
+
+/**
+ * Sanitise a raw form input string for the XLM amount field.
+ *
+ * - Strips any character that is not a digit, dot, or leading minus.
+ * - Limits the whole-number part to MAX_XLM_WHOLE_DIGITS digits.
+ * - Limits the fractional part to 7 digits (one stroop precision).
+ * - Collapses multiple dots down to one.
+ *
+ * Returns the sanitised string, suitable for controlled input state.
+ */
+export function sanitizeXlmInput(raw: string): string {
+  // Keep only digits, dots, and a single leading minus.
+  let s = raw.replace(/[^\d.-]/g, "");
+
+  // Preserve at most one leading minus.
+  const negative = s.startsWith("-");
+  s = (negative ? "-" : "") + s.replace(/-/g, "");
+
+  // Collapse multiple dots — keep only the first.
+  const firstDot = s.indexOf(".");
+  if (firstDot !== -1) {
+    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+  }
+
+  // Clamp whole part length.
+  const dotIndex = s.indexOf(".");
+  if (dotIndex === -1) {
+    const start = negative ? 1 : 0;
+    s = s.slice(0, start + MAX_XLM_WHOLE_DIGITS);
+  } else {
+    const start = negative ? 1 : 0;
+    const whole = s.slice(start, dotIndex).slice(0, MAX_XLM_WHOLE_DIGITS);
+    const frac = s.slice(dotIndex + 1).slice(0, 7);
+    s = (negative ? "-" : "") + whole + "." + frac;
+  }
+
+  return s;
 }
 
 export function formatAbsoluteDate(

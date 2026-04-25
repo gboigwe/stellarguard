@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { type AppError, classifyError } from "@/lib/errors";
+import { createSubmitGuard } from "@/lib/submitGuard";
 
 /**
  * Lifecycle stages of a Soroban transaction, in order.
@@ -63,6 +64,9 @@ const IDLE_STATE: TxState = { stage: "idle", error: null, canRetry: false };
 export function useTxLifecycle() {
   const [state, setState] = useState<TxState>(IDLE_STATE);
   const runIdRef = useRef(0);
+  // One guard per lifecycle instance; prevents a second click from
+  // starting a new submission while the current one is still in-flight.
+  const submitGuardRef = useRef(createSubmitGuard());
 
   const reset = useCallback(() => {
     setState(IDLE_STATE);
@@ -79,44 +83,52 @@ export function useTxLifecycle() {
       sign: (built: TBuilt) => Promise<TResult>;
       /** Called with the result after the chain confirms. */
       onSuccess?: (result: TResult) => void;
-    }): Promise<TResult> => {
-      const runId = ++runIdRef.current;
+    }): Promise<TResult | undefined> => {
+      return submitGuardRef.current.run(async () => {
+        const runId = ++runIdRef.current;
 
-      const setStage = (stage: TxStage) => {
-        if (runIdRef.current === runId) {
-          setState({ stage, error: null, canRetry: false });
+        const setStage = (stage: TxStage) => {
+          if (runIdRef.current === runId) {
+            setState({ stage, error: null, canRetry: false });
+          }
+        };
+
+        try {
+          setStage("building");
+          const built = await steps.build();
+
+          setStage("signing");
+          // signing and submitting are sequential but happen inside signAndSubmit;
+          // we advance to "submitting" immediately after the sign call resolves so
+          // the UI shows deterministic progress.
+          setStage("submitting");
+          const result = await steps.sign(built);
+
+          setStage("confirming");
+
+          if (runIdRef.current === runId) {
+            setState({ stage: "success", error: null, canRetry: false });
+            steps.onSuccess?.(result);
+          }
+
+          return result;
+        } catch (err: unknown) {
+          if (runIdRef.current === runId) {
+            const appError = classifyError(err);
+            setState({ stage: "error", error: appError, canRetry: appError.recoverable });
+          }
+          throw err;
         }
-      };
-
-      try {
-        setStage("building");
-        const built = await steps.build();
-
-        setStage("signing");
-        // signing and submitting are sequential but happen inside signAndSubmit;
-        // we advance to "submitting" immediately after the sign call resolves so
-        // the UI shows deterministic progress.
-        setStage("submitting");
-        const result = await steps.sign(built);
-
-        setStage("confirming");
-
-        if (runIdRef.current === runId) {
-          setState({ stage: "success", error: null, canRetry: false });
-          steps.onSuccess?.(result);
-        }
-
-        return result;
-      } catch (err: unknown) {
-        if (runIdRef.current === runId) {
-          const appError = classifyError(err);
-          setState({ stage: "error", error: appError, canRetry: appError.recoverable });
-        }
-        throw err;
-      }
+      });
     },
     [],
   );
 
-  return { state, run, reset };
+  /** True while a transaction is actively being built, signed, or submitted. */
+  const isSubmitting = useCallback(
+    () => submitGuardRef.current.isSubmitting(),
+    [],
+  );
+
+  return { state, run, reset, isSubmitting };
 }
