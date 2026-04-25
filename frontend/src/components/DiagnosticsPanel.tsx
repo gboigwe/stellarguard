@@ -44,7 +44,7 @@ function DiagRow({ label, value, mono }: { label: string; value: string; mono?: 
 export function DiagnosticsPanel() {
   const { address, network, isConnected, isFreighterInstalled } = useFreighter();
   const [isOpen, setIsOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "unsupported" | "error">("idle");
   const [rpcLatency, setRpcLatency] = useState<number | null>(null);
   const [rpcStatus, setRpcStatus] = useState<"checking" | "ok" | "error">("checking");
 
@@ -103,25 +103,35 @@ export function DiagnosticsPanel() {
 
   const snapshot = JSON.stringify(info, null, 2);
 
+  const clipboardSupported =
+    typeof navigator !== "undefined" &&
+    typeof navigator.clipboard !== "undefined" &&
+    typeof navigator.clipboard.writeText === "function";
+
   async function copySnapshot() {
+    if (!clipboardSupported) {
+      setCopyStatus("unsupported");
+      setTimeout(() => setCopyStatus("idle"), 3000);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(snapshot);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyStatus("copied");
+      setTimeout(() => setCopyStatus("idle"), 2000);
     } catch {
-      // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = snapshot;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyStatus("error");
+      setTimeout(() => setCopyStatus("idle"), 3000);
     }
   }
+
+  const copyButtonLabel =
+    copyStatus === "copied"
+      ? "Copied!"
+      : copyStatus === "unsupported"
+        ? "Clipboard unavailable — select & copy manually"
+        : copyStatus === "error"
+          ? "Copy failed"
+          : "Copy Snapshot";
 
   const statusColor =
     rpcStatus === "ok" ? "bg-emerald-500" : rpcStatus === "error" ? "bg-red-500" : "bg-yellow-500";
@@ -144,9 +154,11 @@ export function DiagnosticsPanel() {
             <div className="flex gap-2">
               <button
                 onClick={copySnapshot}
-                className="rounded-lg bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors"
+                disabled={!clipboardSupported && copyStatus === "unsupported"}
+                aria-live="polite"
+                className="rounded-lg bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-60"
               >
-                {copied ? "Copied!" : "Copy Snapshot"}
+                {copyButtonLabel}
               </button>
               <button
                 onClick={() => setIsOpen(false)}
@@ -209,6 +221,24 @@ export function DiagnosticsPanel() {
             <p className="text-[10px] text-gray-600 text-center pt-2">
               Snapshot: {info.timestamp}
             </p>
+
+            {copyStatus === "unsupported" && (
+              <div className="space-y-1">
+                <label
+                  htmlFor="diagnostics-snapshot-fallback"
+                  className="block text-[10px] text-gray-500"
+                >
+                  Clipboard API unavailable. Select the text below and copy manually:
+                </label>
+                <textarea
+                  id="diagnostics-snapshot-fallback"
+                  readOnly
+                  value={snapshot}
+                  rows={6}
+                  className="w-full rounded-md border border-white/10 bg-stellar-darker/60 p-2 text-[10px] font-mono text-gray-200 focus:outline-none focus:ring-1 focus:ring-stellar-blue/50"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
