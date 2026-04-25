@@ -147,6 +147,15 @@ function toSymbolScVal(value: string, fieldName: string): xdr.ScVal {
   return nativeToScVal(normalized, { type: "symbol" });
 }
 
+function toStringScVal(value: string, fieldName: string): xdr.ScVal {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${fieldName} cannot be empty`);
+  }
+
+  return nativeToScVal(normalized, { type: "string" });
+}
+
 function toProposalActionScVal(action: string): xdr.ScVal {
   const normalized = action.trim() as GovernanceProposalAction;
   if (!GOVERNANCE_ACTIONS.includes(normalized)) {
@@ -231,8 +240,8 @@ export async function buildCreateProposalTx(
 ): Promise<TransactionBuilder> {
   const args = [
     toAddressScVal(proposer),
-    toSymbolScVal(title, "title"),
-    toSymbolScVal(description, "description"),
+    toStringScVal(title, "title"),
+    toStringScVal(description, "description"),
     toProposalActionScVal(action),
     nativeToScVal(amount, { type: "i128" }),
     toAddressScVal(target),

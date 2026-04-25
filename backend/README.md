@@ -36,6 +36,13 @@ This directory contains PostgreSQL migration scripts for the StellarGuard backen
    ./migrate.sh up
    ```
 
+## CORS Configuration
+
+- Set `CORS_ORIGIN` to the allowed frontend origin, for example `http://localhost:3000` in local development.
+- Multiple origins can be provided as a comma-separated list.
+- If `NODE_ENV` is not `production`, the backend defaults to `http://localhost:3000`.
+- If `NODE_ENV=production` and `CORS_ORIGIN` resolves to `*`, the server logs a startup warning because wildcard CORS is unsafe for production deployments.
+
 ## Notes
 
 - All amounts are stored in stroops (1 XLM = 10,000,000 stroops)
