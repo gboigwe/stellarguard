@@ -14,6 +14,7 @@ export const WalletConnect = () => {
       <SecureExternalLink
         href="https://www.freighter.app/"
         className="btn-primary text-sm"
+        aria-label="Install Freighter wallet browser extension"
       >
         Install Freighter
       </SecureExternalLink>
@@ -22,7 +23,7 @@ export const WalletConnect = () => {
 
   if (isConnecting) {
     return (
-      <button disabled className="btn-secondary text-sm opacity-50 cursor-not-allowed">
+      <button disabled className="btn-secondary text-sm opacity-50 cursor-not-allowed" aria-label="Connecting to wallet, please wait">
         Connecting...
       </button>
     );
@@ -42,6 +43,7 @@ export const WalletConnect = () => {
         <button 
           onClick={disconnect}
           className="text-xs text-gray-500 hover:text-white transition-colors"
+          aria-label="Disconnect wallet from StellarGuard"
         >
           Disconnect
         </button>
@@ -50,10 +52,21 @@ export const WalletConnect = () => {
   }
 
   return (
-    <div className="flex flex-col items-end space-y-1">
+    <div 
+      role="status" 
+      aria-live="polite" 
+      aria-atomic="true"
+      className="flex flex-col items-end space-y-1"
+    >
+      <div 
+        className="sr-only"
+      >
+        {address ? `Wallet connected: ${formatAddress(address)}` : 'Wallet not connected'}
+      </div>
       <button 
         onClick={connect}
         className="btn-primary text-sm"
+        aria-label="Connect your Freighter wallet to StellarGuard"
       >
         Connect Wallet
       </button>
