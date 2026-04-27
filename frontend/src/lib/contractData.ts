@@ -1,5 +1,3 @@
-export type Decoder<T> = (value: unknown) => T;
-
 export type GovernanceProposalAction =
   | "Funding"
   | "PolicyChange"

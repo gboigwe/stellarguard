@@ -6,7 +6,11 @@ import { Toaster } from "react-hot-toast";
 import "./globals.css";
 import { FreighterProvider } from "@/context/FreighterProvider";
 import { WalletConnect } from "@/components/WalletConnect";
-import { DiagnosticsPanel } from "@/components/DiagnosticsPanel";
+import dynamic from "next/dynamic";
+
+const DiagnosticsPanel = dynamic(() => import("@/components/DiagnosticsPanel").then(mod => ({ default: mod.DiagnosticsPanel })), {
+  ssr: false,
+});
 import { ToastContainer } from "@/components/Toast";
 import { NetworkMismatchBanner } from "@/components/NetworkMismatchBanner";
 import { MobileNav } from "@/components/MobileNav";

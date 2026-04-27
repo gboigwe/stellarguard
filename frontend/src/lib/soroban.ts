@@ -16,7 +16,8 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { signTransaction } from "@stellar/freighter-api";
-import type { Decoder, GovernanceProposalAction } from "./contractData";
+import type { GovernanceProposalAction } from "./contractData";
+import type { Decoder } from "./sorobanClient";
 import { readPublicEnv, requirePublicEnv } from "./env";
 import { throwIfAborted } from "./requestGuard";
 import { SOROBAN_RPC_URL, NETWORK_PASSPHRASE } from "./network";

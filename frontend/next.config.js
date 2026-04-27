@@ -46,6 +46,10 @@ const nextConfig = {
       },
     ];
   },
+  // Optimized chunk splitting for better code splitting
+  experimental: {
+    optimizePackageImports: ['@stellar/stellar-sdk', 'lucide-react'],
+  },
   // Stellar SDK requires these for browser compatibility
   webpack: (config) => {
     config.resolve.fallback = {
@@ -54,6 +58,27 @@ const nextConfig = {
       net: false,
       tls: false,
     };
+    
+    // Optimize chunk splitting
+    config.optimization = {
+      ...config.optimization,
+      splitChunks: {
+        chunks: 'all',
+        cacheGroups: {
+          stellar: {
+            test: /[\\/]node_modules[\\/]@stellar[\\/]/,
+            name: 'stellar-sdk',
+            priority: 10,
+          },
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            priority: 5,
+          },
+        },
+      },
+    };
+    
     return config;
   },
 };
