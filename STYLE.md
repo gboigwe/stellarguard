@@ -115,6 +115,109 @@ export function ProposalCard({ proposal, onVote }: ProposalCardProps) {
 
 ---
 
+## 🏗️ TypeScript (NestJS Backend)
+
+### Formatting
+
+- Use **Prettier** for formatting (same config as frontend).
+- Use **ESLint** with `@typescript-eslint` rules.
+
+### Naming Conventions
+
+| Item | Convention | Example |
+|------|-----------|---------|
+| Controllers | `PascalCase` + `Controller` suffix | `TreasuryController` |
+| Services | `PascalCase` + `Service` suffix | `TreasuryService` |
+| Modules | `PascalCase` + `Module` suffix | `AppModule` |
+| DTOs / schemas | `PascalCase` | `CreateProposalDto` |
+| Guards / Middleware | `PascalCase` + role suffix | `ApiKeyGuard`, `RequestLoggerMiddleware` |
+
+### File Organization
+
+- One class per file. File name mirrors the class name in `kebab-case`:
+  - `TreasuryController` → `treasury.controller.ts`
+  - `TreasuryService` → `treasury.service.ts`
+- Group files by feature module under `src/<feature>/`:
+  ```
+  src/
+    treasury/
+      treasury.controller.ts
+      treasury.service.ts
+      treasury.service.test.ts
+    governance/
+    vault/
+    middleware/
+    guards/
+  ```
+- Shared infrastructure (middleware, guards, decorators) lives in its own top-level directory.
+
+### Decorator Usage
+
+```typescript
+// ✅ Controllers: declare route prefix and apply Swagger tags
+@ApiTags('treasury')
+@Controller('treasury')
+export class TreasuryController {
+
+  // ✅ Route methods: declare HTTP verb, path, and Swagger metadata
+  @ApiOperation({ summary: 'Get treasury balance' })
+  @ApiResponse({ status: 200, description: 'Current balance' })
+  @Get('balance')
+  getBalance() { ... }
+
+  // ✅ Write endpoints protected by guard — use @Public() to opt out
+  @Post('propose')
+  propose(@Body() dto: ProposeDto) { ... }
+}
+```
+
+- Always annotate controllers and routes with Swagger decorators (`@ApiTags`, `@ApiOperation`, `@ApiResponse`).
+- Use `@Public()` to mark endpoints that should bypass the global `ApiKeyGuard`.
+- Inject services via constructor, not property injection.
+
+### Zod Validation
+
+- Define all input schemas with Zod in the service or a dedicated `*.schema.ts` file.
+- Parse at the service boundary, not in the controller.
+
+```typescript
+import { z } from 'zod';
+
+const ProposalSchema = z.object({
+  contractId: z.string().min(1),
+  limit:      z.number().int().positive().max(100).optional(),
+});
+
+// In the service:
+const params = ProposalSchema.parse(raw);
+```
+
+- Never trust raw query/body values without parsing them through a Zod schema.
+- Use `z.coerce.number()` for numeric query params (they arrive as strings in Express).
+
+### Database Query Patterns
+
+- Interact with Postgres through the `Pool` from `src/db.ts` — never create a new `Pool` directly inside a service.
+- Prefer parameterised queries; never interpolate user input into SQL strings.
+
+```typescript
+// ✅ Good: parameterised
+const result = await pool.query(
+  'SELECT * FROM events WHERE contract_id = $1 ORDER BY id DESC LIMIT $2',
+  [contractId, limit],
+);
+
+// ❌ Bad: SQL injection risk
+const result = await pool.query(
+  `SELECT * FROM events WHERE contract_id = '${contractId}'`,
+);
+```
+
+- Wrap multi-statement operations in a transaction (`BEGIN` / `COMMIT` / `ROLLBACK`).
+- Keep query logic in the service layer; controllers only validate, delegate, and format responses.
+
+---
+
 ## 📝 General Rules
 
 1. **No commented-out code** in commits.

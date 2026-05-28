@@ -209,7 +209,7 @@ Public API:
 - `lock_tokens(owner, amount, duration, memo)`
 - `claim(owner, lock_id)`
 - `approve_emergency(signer, lock_id)`
-- `emergency_unlock(caller, lock_id)`
+- `emergency_unlock(caller, lock_id)` — **caller-agnostic**: any address may trigger execution once the approval threshold is met; the caller does not need to be the lock owner or an emergency signer.
 - `create_vesting(admin, beneficiary, total_amount, duration, cliff, memo)`
 - `claim_vested(beneficiary, vesting_id)`
 - `get_lock(lock_id)`
@@ -228,7 +228,7 @@ Events:
 - `(vault, vest)` schema: `(vesting_id: u64, beneficiary: Address, total_amount: i128, duration: u64)`; example: `(1_u64, beneficiary_address, 900_000_i128, 90_u64)`
 - `(vault, v_claim)` schema: `(vesting_id: u64, beneficiary: Address, claimable_amount: i128)`; example: `(1_u64, beneficiary_address, 450_000_i128)`
 - `(vault, emrg_ap)` schema: `(lock_id: u64, signer: Address, approval_count: u32)`; example: `(1_u64, signer_address, 2_u32)`
-- `(vault, emrg_ex)` schema: `(lock_id: u64, caller: Address, amount: i128)`; example: `(1_u64, caller_address, 700_000_i128)`
+- `(vault, emrg_ex)` schema: `(lock_id: u64, caller: Address, owner: Address, amount: i128)`; example: `(1_u64, caller_address, owner_address, 700_000_i128)`
 - `(vault, admin)` schema: `(old_admin: Address, new_admin: Address)`; example: `(old_admin, new_admin)`
 
 ## Backend Event Parser Mapping

@@ -1,0 +1,37 @@
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt (smartcontract)
+        language: system
+        entry: bash -c 'cd smartcontract && cargo fmt --all -- --check'
+        files: \.rs$
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy (smartcontract)
+        language: system
+        entry: bash -c 'cd smartcontract && cargo clippy --all -- -D warnings'
+        files: \.rs$
+        pass_filenames: false
+
+      - id: eslint-frontend
+        name: ESLint (frontend)
+        language: system
+        entry: bash -c 'cd frontend && npm run lint'
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+
+      - id: prettier-frontend
+        name: Prettier check (frontend)
+        language: system
+        entry: bash -c 'cd frontend && npx prettier --check "**/*.{ts,tsx,js,jsx,json,css}"'
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css)$
+        pass_filenames: false
+
+      - id: eslint-backend
+        name: ESLint (backend)
+        language: system
+        entry: bash -c 'cd backend && npm run lint'
+        files: ^backend/.*\.ts$
+        pass_filenames: false
