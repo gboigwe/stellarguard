@@ -57,6 +57,20 @@ export function useAnalytics() {
     [track],
   );
 
+  const trackProposalVote = useCallback(
+    (proposalId: string, vote: string) => {
+      track({ name: "proposal_vote", properties: { proposalId, vote } });
+    },
+    [track],
+  );
+
+  const trackTreasuryDeposit = useCallback(
+    (chain: string) => {
+      track({ name: "treasury_deposit", properties: { chain } });
+    },
+    [track],
+  );
+
   return {
     track,
     trackWalletConnect,
@@ -65,5 +79,7 @@ export function useAnalytics() {
     trackTxSuccess,
     trackTxFailure,
     trackPageView,
+    trackProposalVote,
+    trackTreasuryDeposit,
   };
 }

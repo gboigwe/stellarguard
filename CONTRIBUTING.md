@@ -9,6 +9,16 @@ Thank you for your interest in building trustless treasury management on Stellar
 - **Backend:** FastAPI or NestJS
 - **Indexing:** Custom Soroban-RPC event listener
 
+## 📦 Required SDK Version
+
+Both the `frontend` and `backend` packages must use the **same** `@stellar/stellar-sdk` version.
+The required version is **`^12.3.0`** (currently `12.3.0`).
+
+> Keeping both packages on the same minor range ensures XDR encoding and event
+> parsing are consistent between the frontend transaction builders and the
+> backend event indexer. Always update both `package.json` files together and
+> verify event parsing when bumping the SDK.
+
 ## 📝 Commit Guidelines (Strict)
 
 We follow a strict **Modular Commit** philosophy to ensure history is readable and revertible.

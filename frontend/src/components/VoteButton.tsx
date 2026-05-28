@@ -2,6 +2,7 @@ import React from "react";
 import { toast } from "react-hot-toast";
 import { useFreighter } from "@/hooks/useFreighter";
 import { useGovernance } from "@/hooks/useGovernance";
+import { trackEvent } from "@/lib/analytics";
 
 interface VoteButtonProps {
   proposalId: number;
@@ -37,6 +38,10 @@ export const VoteButton: React.FC<VoteButtonProps> = ({
 
     try {
       await vote(proposalId, voteFor);
+      trackEvent({
+        name: "proposal_vote",
+        properties: { proposalId: String(proposalId), vote: voteFor ? "for" : "against" },
+      });
       toast.success(
         `Vote submitted ${voteFor ? "for" : "against"} proposal #${proposalId}`,
       );

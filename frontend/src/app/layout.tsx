@@ -15,6 +15,7 @@ const DiagnosticsPanel = dynamic(() => import("@/components/DiagnosticsPanel").t
 import { ToastContainer } from "@/components/Toast";
 import { NetworkMismatchBanner } from "@/components/NetworkMismatchBanner";
 import { MobileNav } from "@/components/MobileNav";
+import { RouteTracker } from "@/components/RouteTracker";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -70,6 +71,7 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-stellar-darker font-sans text-gray-100 selection:bg-stellar-blue/30">
         <FreighterProvider>
+          <RouteTracker />
           <nav className="border-b border-white/5 bg-stellar-darker/60 backdrop-blur-xl sticky top-0 z-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between h-20 items-center">

@@ -27,6 +27,7 @@ import {
 } from "@/lib/treasuryMocks";
 import { useFreighter } from "./useFreighter";
 import { usePageVisibility } from "./usePageVisibility";
+import { trackEvent } from "@/lib/analytics";
 
 const REFRESH_INTERVAL = 30_000;
 const MAX_VISIBLE_TRANSACTIONS = 20;
@@ -227,6 +228,7 @@ export function useTreasury() {
           amount,
         );
         await signAndSubmit(txBuilder.build());
+        trackEvent({ name: "treasury_deposit", properties: { chain: "stellar" } });
         await refresh();
       } catch (err: unknown) {
         const appError = classifyError(err);

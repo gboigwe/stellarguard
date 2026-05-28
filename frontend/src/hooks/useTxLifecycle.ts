@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { type AppError, classifyError } from "@/lib/errors";
 import { createSubmitGuard } from "@/lib/submitGuard";
+import { trackEvent } from "@/lib/analytics";
 
 /**
  * Lifecycle stages of a Soroban transaction, in order.
@@ -83,6 +84,8 @@ export function useTxLifecycle() {
       sign: (built: TBuilt) => Promise<TResult>;
       /** Called with the result after the chain confirms. */
       onSuccess?: (result: TResult) => void;
+      /** Optional metadata used to emit analytics events for this transaction. */
+      meta?: { type: string; chain?: string };
     }): Promise<TResult | undefined> => {
       return submitGuardRef.current.run(async () => {
         const runId = ++runIdRef.current;
@@ -93,11 +96,16 @@ export function useTxLifecycle() {
           }
         };
 
+        const chain = steps.meta?.chain ?? "stellar";
+        const txType = steps.meta?.type ?? "unknown";
+        const startMs = Date.now();
+
         try {
           setStage("building");
           const built = await steps.build();
 
           setStage("signing");
+          trackEvent({ name: "tx_submit", properties: { type: txType, chain } });
           const result = await steps.sign(built);
           // signing stage persists while the wallet popup is open; only advance
           // to confirming once the signed transaction has been submitted.
@@ -105,6 +113,10 @@ export function useTxLifecycle() {
 
           if (runIdRef.current === runId) {
             setState({ stage: "success", error: null, canRetry: false });
+            trackEvent({
+              name: "tx_success",
+              properties: { type: txType, chain, durationMs: Date.now() - startMs },
+            });
             steps.onSuccess?.(result);
           }
 
@@ -113,6 +125,10 @@ export function useTxLifecycle() {
           if (runIdRef.current === runId) {
             const appError = classifyError(err);
             setState({ stage: "error", error: appError, canRetry: appError.recoverable });
+            trackEvent({
+              name: "tx_failure",
+              properties: { type: txType, chain, errorCode: appError.code ?? "unknown" },
+            });
           }
           throw err;
         }

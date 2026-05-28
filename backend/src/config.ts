@@ -11,6 +11,7 @@ export interface Config {
   pollIntervalMs: number;
   corsOrigin: string | string[];
   nodeEnv: string;
+  dbPoolMax: number;
 }
 
 function getContractIds(): string[] {
@@ -59,6 +60,7 @@ export function loadConfig(): Config {
   const networkPassphrase =
     process.env.NETWORK_PASSPHRASE || "Test SDF Network ; September 2015";
   const pollIntervalMs = parseInt(process.env.POLL_INTERVAL_MS || "5000", 10);
+  const dbPoolMax = parseInt(process.env.DB_POOL_MAX || "10", 10);
   const contractIds = getContractIds();
   const corsOrigin = parseCorsOrigin(nodeEnv);
 
@@ -86,6 +88,7 @@ export function loadConfig(): Config {
     pollIntervalMs,
     corsOrigin,
     nodeEnv,
+    dbPoolMax,
   };
 }
 
