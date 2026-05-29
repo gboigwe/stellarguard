@@ -50,7 +50,8 @@ export const FreighterProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       }
     } catch (err) {
-      console.error("Error checking Freighter connection:", err);
+      const classified = classifyError(err);
+      setError(classified.message ?? null);
     }
   }, []);
 

@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS events (
   ledger INTEGER NOT NULL,
   timestamp BIGINT,
   cursor TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_contract ON events(contract_id);
@@ -37,8 +38,37 @@ CREATE TABLE IF NOT EXISTS event_cursor (
   id INTEGER PRIMARY KEY DEFAULT 1,
   cursor TEXT,
   last_ledger INTEGER,
+  created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_events_updated_at'
+  ) THEN
+    CREATE TRIGGER trg_events_updated_at
+    BEFORE UPDATE ON events
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_event_cursor_updated_at'
+  ) THEN
+    CREATE TRIGGER trg_event_cursor_updated_at
+    BEFORE UPDATE ON event_cursor
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
 `;
 
 export async function initializeSchema(): Promise<void> {

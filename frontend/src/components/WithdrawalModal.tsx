@@ -44,7 +44,7 @@ export function WithdrawalModal({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isProposing) {
-        handleClose();
+        handleDismiss();
       }
     };
 
@@ -68,10 +68,17 @@ export function WithdrawalModal({
   const isMemoValid = memo.trim().length > 0 && memoBytes <= MEMO_MAX_BYTES;
   const isValid = isValidAddress && isValidAmount && isMemoValid;
 
+  // Explicit close (X button) always resets the form.
   const handleClose = () => {
     setTo("");
     setAmount("");
     setMemo("");
+    setSubmitError(null);
+    onClose();
+  };
+
+  // Backdrop / Escape dismissal: close without resetting so values survive a re-open.
+  const handleDismiss = () => {
     setSubmitError(null);
     onClose();
   };
@@ -112,7 +119,7 @@ export function WithdrawalModal({
       role="presentation"
       onClick={() => {
         if (!isProposing) {
-          handleClose();
+          handleDismiss();
         }
       }}
     >
