@@ -70,6 +70,7 @@ export default function RootLayout({
       className={`${inter.variable} ${jetBrainsMono.variable} dark`}
     >
       <body className="min-h-screen bg-stellar-darker font-sans text-gray-100 selection:bg-stellar-blue/30">
+        <a href="#main-content" className="skip-to-content">Skip to content</a>
         <FreighterProvider>
           <RouteTracker />
           <nav className="border-b border-white/5 bg-stellar-darker/60 backdrop-blur-xl sticky top-0 z-50">

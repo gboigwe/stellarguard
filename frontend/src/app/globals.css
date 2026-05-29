@@ -2,14 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Shared brand tokens */
 :root {
   --stellar-blue: #3b5cf7;
   --stellar-purple: #7c3aed;
   --stellar-pink: #ff0080;
+}
+
+/* Light mode */
+:root:not(.dark) {
+  --bg-dark: #f0f4ff;
+  --bg-darker: #e8edf8;
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --card-border: rgba(200, 210, 240, 0.6);
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a5568;
+}
+
+/* Dark mode */
+.dark {
   --bg-dark: #0f0f23;
   --bg-darker: #0a0a1a;
   --card-bg: rgba(26, 26, 46, 0.6);
   --card-border: rgba(42, 42, 78, 0.5);
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
 }
 
 body {
@@ -42,5 +59,10 @@ body {
 
   .nav-link {
     @apply text-gray-400 hover:text-white transition-all duration-300 text-sm font-medium relative py-1 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-stellar-blue after:transition-all after:duration-300 hover:after:w-full;
+  }
+
+  /* Skip-to-content link — visually hidden until focused (A11Y-5) */
+  .skip-to-content {
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-stellar-blue focus:text-white focus:font-semibold focus:shadow-lg;
   }
 }
