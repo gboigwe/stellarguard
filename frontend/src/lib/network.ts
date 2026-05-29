@@ -36,27 +36,42 @@ export const NETWORKS = {
 // Active Network
 // ============================================================================
 
-/** The currently active network. Change this for deployment. */
-export const ACTIVE_NETWORK = NETWORKS.testnet;
+function resolveActiveNetwork(): (typeof NETWORKS)[keyof typeof NETWORKS] {
+  const key = (
+    process.env.NEXT_PUBLIC_NETWORK ?? "testnet"
+  ).toLowerCase() as keyof typeof NETWORKS;
+  return key in NETWORKS ? NETWORKS[key] : NETWORKS.testnet;
+}
 
-/** Soroban RPC URL for the active network. */
-export const SOROBAN_RPC_URL = ACTIVE_NETWORK.sorobanRpcUrl;
+/** The currently active network, resolved from NEXT_PUBLIC_NETWORK (defaults to testnet). */
+export const ACTIVE_NETWORK = resolveActiveNetwork();
 
-/** Horizon API URL for the active network. */
-export const HORIZON_URL = ACTIVE_NETWORK.horizonUrl;
+/** Soroban RPC URL — overridable via NEXT_PUBLIC_SOROBAN_RPC_URL. */
+export const SOROBAN_RPC_URL =
+  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? ACTIVE_NETWORK.sorobanRpcUrl;
+
+/** Horizon API URL — overridable via NEXT_PUBLIC_HORIZON_URL. */
+export const HORIZON_URL =
+  process.env.NEXT_PUBLIC_HORIZON_URL ?? ACTIVE_NETWORK.horizonUrl;
 
 /** Network passphrase for the active network. */
 export const NETWORK_PASSPHRASE = ACTIVE_NETWORK.networkPassphrase;
+export const ACTIVE_NETWORK_KEY = Object.entries(NETWORKS).find(
+  ([, network]) => network.networkPassphrase === NETWORK_PASSPHRASE,
+)?.[0] as keyof typeof NETWORKS | undefined;
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-/**
- * Get a Soroban RPC server instance.
- */
+let _serverInstance: SorobanRpc.Server | null = null;
+
+/** Returns the shared Soroban RPC server singleton. Prefer sorobanClient in new code. */
 export function getServer(): SorobanRpc.Server {
-  return new SorobanRpc.Server(SOROBAN_RPC_URL);
+  if (!_serverInstance) {
+    _serverInstance = new SorobanRpc.Server(SOROBAN_RPC_URL);
+  }
+  return _serverInstance;
 }
 
 /**
@@ -75,4 +90,60 @@ export async function fundAccount(address: string): Promise<boolean> {
     console.error("Failed to fund account:", err);
     return false;
   }
+}
+
+export function normalizeWalletNetwork(
+  value: string,
+): "testnet" | "futurenet" | "mainnet" | null {
+  const normalized = value.trim().toLowerCase();
+
+  if (
+    normalized.includes("testnet") ||
+    normalized.includes("test sdf network ; september 2015")
+  ) {
+    return "testnet";
+  }
+
+  if (
+    normalized.includes("futurenet") ||
+    normalized.includes("future network ; october 2022")
+  ) {
+    return "futurenet";
+  }
+
+  if (
+    normalized.includes("mainnet") ||
+    normalized.includes("public") ||
+    normalized.includes("public global stellar network ; september 2015")
+  ) {
+    return "mainnet";
+  }
+
+  return null;
+}
+
+export function getWalletNetworkLabel(walletNetwork: string | null): string {
+  if (!walletNetwork) {
+    return "unknown";
+  }
+
+  const normalized = normalizeWalletNetwork(walletNetwork);
+  if (normalized) {
+    return NETWORKS[normalized].name;
+  }
+
+  return walletNetwork;
+}
+
+export function isWalletNetworkMismatch(walletNetwork: string | null): boolean {
+  if (!walletNetwork || !ACTIVE_NETWORK_KEY) {
+    return false;
+  }
+
+  const walletNetworkKey = normalizeWalletNetwork(walletNetwork);
+  if (!walletNetworkKey) {
+    return false;
+  }
+
+  return walletNetworkKey !== ACTIVE_NETWORK_KEY;
 }

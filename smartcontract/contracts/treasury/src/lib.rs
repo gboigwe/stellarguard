@@ -3,7 +3,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, log, symbol_short, token, Address, Env,
-    Symbol, Vec,
+    String, Vec,
 };
 
 // ============================================================================
@@ -51,6 +51,8 @@ pub enum Error {
 pub enum DataKey {
     /// The admin address that initialized the contract.
     Admin,
+    /// The asset contract this treasury manages.
+    Asset,
     /// The approval threshold for multi-sig.
     Threshold,
     /// List of authorized signers.
@@ -65,6 +67,8 @@ pub enum DataKey {
     Initialized,
     /// Per-depositor, per-token balance: (depositor, token_address) → i128.
     TokenBalance(Address, Address),
+    /// Sum of amounts across all pending (non-executed) proposals.
+    Reserved,
 }
 
 /// A pending transaction proposal in the multi-sig treasury.
@@ -78,7 +82,7 @@ pub struct Transaction {
     /// Amount to withdraw (in stroops).
     pub amount: i128,
     /// Text description / memo for the transaction.
-    pub memo: Symbol,
+    pub memo: String,
     /// Addresses that have approved this transaction.
     pub approvals: Vec<Address>,
     /// Whether the transaction has been executed.
@@ -125,6 +129,7 @@ impl TreasuryContract {
     /// * `admin` - The address that will administer the treasury.
     /// * `threshold` - The number of approvals required for withdrawals.
     /// * `signers` - Initial list of authorized signers.
+    /// * `asset` - The managed SAC/SEP-41 asset contract address.
     ///
     /// # Errors
     /// * `Error::AlreadyInitialized` - If the contract was already initialized.
@@ -134,6 +139,7 @@ impl TreasuryContract {
         admin: Address,
         threshold: u32,
         signers: Vec<Address>,
+        asset: Address,
     ) -> Result<(), Error> {
         // Prevent re-initialization
         if env.storage().instance().has(&DataKey::Initialized) {
@@ -151,12 +157,14 @@ impl TreasuryContract {
         // Store all initial state
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Asset, &asset);
         env.storage()
             .instance()
             .set(&DataKey::Threshold, &threshold);
         env.storage().instance().set(&DataKey::Signers, &signers);
         env.storage().instance().set(&DataKey::Balance, &0_i128);
         env.storage().instance().set(&DataKey::TxCounter, &0_u64);
+        env.storage().instance().set(&DataKey::Reserved, &0_i128);
 
         // Emit initialization event
         env.events().publish(
@@ -195,6 +203,15 @@ impl TreasuryContract {
         }
 
         from.require_auth();
+
+        let asset: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Asset)
+            .ok_or(Error::NotInitialized)?;
+
+        let token_client = token::TokenClient::new(&env, &asset);
+        token_client.transfer(&from, &env.current_contract_address(), &amount);
 
         // Update balance
         let current_balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
@@ -291,7 +308,7 @@ impl TreasuryContract {
     /// * `proposer` - The signer proposing the withdrawal.
     /// * `to` - The destination address.
     /// * `amount` - The amount to withdraw.
-    /// * `memo` - A short description of the withdrawal.
+    /// * `memo` - A description of the withdrawal.
     ///
     /// # Returns
     /// The ID of the created transaction proposal.
@@ -306,7 +323,7 @@ impl TreasuryContract {
         proposer: Address,
         to: Address,
         amount: i128,
-        memo: Symbol,
+        memo: String,
     ) -> Result<u64, Error> {
         Self::require_initialized(&env)?;
         Self::require_signer(&env, &proposer)?;
@@ -317,11 +334,18 @@ impl TreasuryContract {
             return Err(Error::InvalidAmount);
         }
 
-        // Check sufficient balance
+        // Check sufficient *unreserved* balance — multiple pending proposals
+        // must not be able to collectively over-commit the same funds.
         let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
-        if balance < amount {
+        let reserved: i128 = env.storage().instance().get(&DataKey::Reserved).unwrap_or(0);
+        if balance - reserved < amount {
             return Err(Error::InsufficientFunds);
         }
+
+        // Reserve the funds so subsequent proposals cannot reference them.
+        env.storage()
+            .instance()
+            .set(&DataKey::Reserved, &(reserved + amount));
 
         // Get and increment counter
         let tx_id: u64 = env
@@ -486,10 +510,29 @@ impl TreasuryContract {
         if current_balance < transaction.amount {
             return Err(Error::InsufficientFunds);
         }
+
+        let asset: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Asset)
+            .ok_or(Error::NotInitialized)?;
+        let token_client = token::TokenClient::new(&env, &asset);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &transaction.to,
+            &transaction.amount,
+        );
+
         let new_balance = current_balance - transaction.amount;
         env.storage()
             .instance()
             .set(&DataKey::Balance, &new_balance);
+
+        // Release the reservation that was placed at proposal time.
+        let reserved: i128 = env.storage().instance().get(&DataKey::Reserved).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::Reserved, &(reserved - transaction.amount));
 
         // Mark as executed
         transaction.executed = true;
@@ -505,6 +548,7 @@ impl TreasuryContract {
                 transaction.to.clone(),
                 transaction.amount,
                 new_balance,
+                true,
             ),
         );
 
@@ -800,6 +844,7 @@ mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::testutils::Events as _;
+    use soroban_sdk::token::{StellarAssetClient, TokenClient};
     use soroban_sdk::{vec, Env, IntoVal, TryFromVal, Val};
 
     // ── helpers shared by all tests ──────────────────────────────────────────
@@ -813,6 +858,31 @@ mod test {
         (env, admin, contract_id, client)
     }
 
+    fn setup_asset(env: &Env) -> (Address, StellarAssetClient<'_>, TokenClient<'_>) {
+        let token_admin = Address::generate(env);
+        let sac_data = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let token_address = sac_data.address();
+        let sac = StellarAssetClient::new(env, &token_address);
+        let token = TokenClient::new(env, &token_address);
+        (token_address, sac, token)
+    }
+
+    fn initialize_treasury(
+        client: &TreasuryContractClient<'_>,
+        env: &Env,
+        admin: &Address,
+        threshold: u32,
+        signers: &Vec<Address>,
+    ) -> Address {
+        let (asset, _sac, _token) = setup_asset(env);
+        client.initialize(admin, &threshold, signers, &asset);
+        asset
+    }
+
+    fn mint_asset(env: &Env, asset: &Address, recipient: &Address, amount: i128) {
+        StellarAssetClient::new(env, asset).mint(recipient, &amount);
+    }
+
     #[test]
     fn test_initialize() {
         let (env, admin, _contract_id, client) = setup_contract();
@@ -823,7 +893,7 @@ mod test {
 
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone(), signer3.clone()]);
 
-        client.initialize(&admin, &2, &signers);
+        let _asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
         let config = client.get_config();
         assert_eq!(config.admin, admin);
@@ -838,12 +908,43 @@ mod test {
 
         let signer1 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone()]);
-        client.initialize(&admin, &1, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
 
         let depositor = Address::generate(&env);
+        mint_asset(&env, &asset, &depositor, 1_000_000);
         client.deposit(&depositor, &1_000_000);
 
         assert_eq!(client.get_balance(), 1_000_000);
+    }
+
+    /// Integration test for SC-26: verify `deposit` actually moves the
+    /// underlying SAC tokens from the depositor into the treasury contract
+    /// rather than only incrementing the bookkeeping balance.
+    #[test]
+    fn test_deposit_moves_real_tokens_on_chain() {
+        let (env, admin, contract_id, client) = setup_contract();
+
+        let signer = Address::generate(&env);
+        let signers = Vec::from_array(&env, [signer]);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
+
+        let depositor = Address::generate(&env);
+        mint_asset(&env, &asset, &depositor, 5_000_000);
+
+        let token = TokenClient::new(&env, &asset);
+        assert_eq!(token.balance(&depositor), 5_000_000);
+        assert_eq!(token.balance(&contract_id), 0);
+
+        client.deposit(&depositor, &2_000_000);
+
+        assert_eq!(token.balance(&contract_id), 2_000_000);
+        assert_eq!(token.balance(&depositor), 3_000_000);
+        assert_eq!(client.get_balance(), 2_000_000);
+
+        client.deposit(&depositor, &1_500_000);
+        assert_eq!(token.balance(&contract_id), 3_500_000);
+        assert_eq!(token.balance(&depositor), 1_500_000);
+        assert_eq!(client.get_balance(), 3_500_000);
     }
 
     #[test]
@@ -853,15 +954,20 @@ mod test {
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
-        client.initialize(&admin, &2, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
         // Deposit some funds
+        mint_asset(&env, &asset, &signer1, 5_000_000);
         client.deposit(&signer1, &5_000_000);
 
         // Propose withdrawal
         let recipient = Address::generate(&env);
-        let tx_id =
-            client.propose_withdrawal(&signer1, &recipient, &1_000_000, &symbol_short!("rent"));
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "rent"),
+        );
         assert_eq!(tx_id, 1);
 
         // Second signer approves
@@ -873,10 +979,120 @@ mod test {
 
         // Check balance deducted
         assert_eq!(client.get_balance(), 4_000_000);
+        assert_eq!(
+            TokenClient::new(&env, &asset).balance(&recipient),
+            1_000_000
+        );
 
         // Check transaction marked as executed
         let tx = client.get_transaction(&tx_id);
         assert_eq!(tx.executed, true);
+    }
+
+    #[test]
+    fn test_full_treasury_workflow_emits_expected_events() {
+        let (env, admin, contract_id, client) = setup_contract();
+
+        let signer1 = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let signer3 = Address::generate(&env);
+        let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone(), signer3.clone()]);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
+
+        mint_asset(&env, &asset, &signer1, 8_000_000);
+        client.deposit(&signer1, &8_000_000);
+
+        let recipient = Address::generate(&env);
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &3_000_000,
+            &String::from_str(&env, "ops"),
+        );
+
+        let approvals = client.approve(&signer2, &tx_id);
+        assert_eq!(approvals, 2);
+
+        client.execute(&signer3, &tx_id);
+
+        let config = client.get_config();
+        assert_eq!(config.balance, 5_000_000);
+
+        let transaction = client.get_transaction(&tx_id);
+        assert_eq!(transaction.executed, true);
+        assert_eq!(transaction.amount, 3_000_000);
+        assert_eq!(transaction.to, recipient);
+        assert_eq!(
+            TokenClient::new(&env, &asset).balance(&recipient),
+            3_000_000
+        );
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 5);
+
+        let init_event = events.get(0).unwrap();
+        assert_eq!(init_event.0, contract_id);
+        assert_eq!(
+            init_event.1,
+            vec![
+                &env,
+                symbol_short!("treasury").into_val(&env),
+                symbol_short!("init").into_val(&env),
+            ]
+        );
+
+        let deposit_event = events.get(1).unwrap();
+        assert_eq!(deposit_event.0, contract_id);
+        assert_eq!(
+            deposit_event.1,
+            vec![
+                &env,
+                symbol_short!("treasury").into_val(&env),
+                symbol_short!("deposit").into_val(&env),
+            ]
+        );
+
+        let propose_event = events.get(2).unwrap();
+        assert_eq!(propose_event.0, contract_id);
+        assert_eq!(
+            propose_event.1,
+            vec![
+                &env,
+                symbol_short!("treasury").into_val(&env),
+                symbol_short!("propose").into_val(&env),
+            ]
+        );
+
+        let approve_event = events.get(3).unwrap();
+        assert_eq!(approve_event.0, contract_id);
+        assert_eq!(
+            approve_event.1,
+            vec![
+                &env,
+                symbol_short!("treasury").into_val(&env),
+                symbol_short!("approve").into_val(&env),
+            ]
+        );
+
+        let execute_event = events.get(events.len() - 1).unwrap();
+        let actual_data: Vec<Val> = Vec::try_from_val(&env, &execute_event.2).unwrap();
+        let expected_data: Vec<Val> = vec![
+            &env,
+            tx_id.into_val(&env),
+            recipient.into_val(&env),
+            3_000_000_i128.into_val(&env),
+            5_000_000_i128.into_val(&env),
+            true.into_val(&env),
+        ];
+        assert_eq!(
+            execute_event.1,
+            vec![
+                &env,
+                symbol_short!("treasury").into_val(&env),
+                symbol_short!("execute").into_val(&env),
+            ]
+        );
+        assert_eq!(actual_data, expected_data);
     }
 
     #[test]
@@ -888,7 +1104,7 @@ mod test {
         let signer3 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone(), signer3.clone()]);
 
-        client.initialize(&admin, &2, &signers);
+        let _asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
         let fetched = client.get_signers();
         assert_eq!(fetched.len(), 3);
@@ -904,19 +1120,24 @@ mod test {
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
-        client.initialize(&admin, &2, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
+        mint_asset(&env, &asset, &signer1, 5_000_000);
         client.deposit(&signer1, &5_000_000);
 
         let recipient = Address::generate(&env);
-        let tx_id =
-            client.propose_withdrawal(&signer1, &recipient, &1_000_000, &symbol_short!("rent"));
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "rent"),
+        );
 
         let tx = client.get_transaction(&tx_id);
         assert_eq!(tx.id, tx_id);
         assert_eq!(tx.to, recipient);
         assert_eq!(tx.amount, 1_000_000);
-        assert_eq!(tx.memo, symbol_short!("rent"));
+        assert_eq!(tx.memo, String::from_str(&env, "rent"));
         assert_eq!(tx.proposer, signer1);
         assert_eq!(tx.approvals.len(), 1);
         assert_eq!(tx.approvals.get(0).unwrap(), signer1);
@@ -929,7 +1150,8 @@ mod test {
 
         let signer = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer.clone()]);
-        client.initialize(&admin, &1, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
+        mint_asset(&env, &asset, &signer, 5_000_000);
         client.deposit(&signer, &5_000_000);
 
         let non_signer = Address::generate(&env);
@@ -939,7 +1161,7 @@ mod test {
             &non_signer,
             &recipient,
             &1_000_000,
-            &symbol_short!("rent"),
+            &String::from_str(&env, "rent"),
         );
         assert_eq!(result, Err(Ok(Error::NotASigner)));
     }
@@ -950,12 +1172,52 @@ mod test {
 
         let signer = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer.clone()]);
-        client.initialize(&admin, &1, &signers);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &signers);
 
         let recipient = Address::generate(&env);
 
-        let result =
-            client.try_propose_withdrawal(&signer, &recipient, &1_000_000, &symbol_short!("rent"));
+        let result = client.try_propose_withdrawal(
+            &signer,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "rent"),
+        );
+        assert_eq!(result, Err(Ok(Error::InsufficientFunds)));
+    }
+
+    /// Regression test: two proposals that together exceed the balance must be
+    /// rejected at proposal time, not silently allowed to race to execute.
+    #[test]
+    fn test_propose_reserves_funds_prevents_double_spend() {
+        let (env, admin, _contract_id, client) = setup_contract();
+
+        let signer1 = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
+
+        // Deposit exactly 1_000_000
+        mint_asset(&env, &asset, &signer1, 1_000_000);
+        client.deposit(&signer1, &1_000_000);
+
+        let recipient = Address::generate(&env);
+
+        // First proposal for the full balance — should succeed
+        let _tx1 = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "first"),
+        );
+
+        // Second proposal for any amount — must be rejected because all funds
+        // are already reserved by the first pending proposal.
+        let result = client.try_propose_withdrawal(
+            &signer2,
+            &recipient,
+            &1,
+            &String::from_str(&env, "second"),
+        );
         assert_eq!(result, Err(Ok(Error::InsufficientFunds)));
     }
 
@@ -968,7 +1230,7 @@ mod test {
         let signer3 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1, signer2, signer3]);
 
-        client.initialize(&admin, &2, &signers);
+        let _asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
         let events = env.events().all();
         let event = events.get(events.len() - 1).unwrap();
@@ -995,9 +1257,10 @@ mod test {
 
         let signer = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer.clone()]);
-        client.initialize(&admin, &1, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
 
         let depositor = Address::generate(&env);
+        mint_asset(&env, &asset, &depositor, 1_000_000);
         client.deposit(&depositor, &1_000_000);
 
         let events = env.events().all();
@@ -1026,13 +1289,18 @@ mod test {
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone(), signer2]);
-        client.initialize(&admin, &2, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
+        mint_asset(&env, &asset, &signer1, 5_000_000);
         client.deposit(&signer1, &5_000_000);
 
         let recipient = Address::generate(&env);
-        let tx_id =
-            client.propose_withdrawal(&signer1, &recipient, &1_000_000, &symbol_short!("rent"));
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "rent"),
+        );
 
         let events = env.events().all();
         let event = events.get(events.len() - 1).unwrap();
@@ -1061,12 +1329,17 @@ mod test {
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
-        client.initialize(&admin, &2, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
+        mint_asset(&env, &asset, &signer1, 5_000_000);
         client.deposit(&signer1, &5_000_000);
         let recipient = Address::generate(&env);
-        let tx_id =
-            client.propose_withdrawal(&signer1, &recipient, &1_000_000, &symbol_short!("rent"));
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "rent"),
+        );
 
         let approval_count = client.approve(&signer2, &tx_id);
 
@@ -1096,12 +1369,17 @@ mod test {
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
         let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
-        client.initialize(&admin, &2, &signers);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
 
+        mint_asset(&env, &asset, &signer1, 5_000_000);
         client.deposit(&signer1, &5_000_000);
         let recipient = Address::generate(&env);
-        let tx_id =
-            client.propose_withdrawal(&signer1, &recipient, &1_000_000, &symbol_short!("rent"));
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "rent"),
+        );
         client.approve(&signer2, &tx_id);
         client.execute(&signer1, &tx_id);
 
@@ -1120,6 +1398,7 @@ mod test {
             recipient.into_val(&env),
             1_000_000_i128.into_val(&env),
             4_000_000_i128.into_val(&env),
+            true.into_val(&env),
         ];
         let actual_data: Vec<Val> = Vec::try_from_val(&env, &event.2).unwrap();
         assert_eq!(actual_data, expected_data);
@@ -1143,7 +1422,7 @@ mod test {
             let admin = Address::generate(&env);
             let signer = Address::generate(&env);
             let signers = Vec::from_array(&env, [signer]);
-            client.initialize(&admin, &1, &signers);
+            let _asset = initialize_treasury(&client, &env, &admin, 1, &signers);
             (env, admin, contract_id, client)
         }
 
@@ -1314,7 +1593,7 @@ mod test {
     fn test_add_signer() {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1.clone()]);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &vec![&env, signer1.clone()]);
 
         let new_signer = Address::generate(&env);
         client.add_signer(&admin, &new_signer);
@@ -1328,7 +1607,7 @@ mod test {
     fn test_add_signer_unauthorized() {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1.clone()]);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &vec![&env, signer1.clone()]);
 
         let non_admin = Address::generate(&env);
         let new_signer = Address::generate(&env);
@@ -1341,7 +1620,13 @@ mod test {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1.clone(), signer2.clone()]);
+        let _asset = initialize_treasury(
+            &client,
+            &env,
+            &admin,
+            1,
+            &vec![&env, signer1.clone(), signer2.clone()],
+        );
 
         client.remove_signer(&admin, &signer2);
 
@@ -1354,7 +1639,7 @@ mod test {
     fn test_remove_signer_threshold_breach() {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1.clone()]);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &vec![&env, signer1.clone()]);
 
         let result = client.try_remove_signer(&admin, &signer1);
         assert_eq!(result, Err(Ok(Error::ThresholdBreach)));
@@ -1365,7 +1650,7 @@ mod test {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1, signer2]);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &vec![&env, signer1, signer2]);
 
         client.set_threshold(&admin, &2);
         assert_eq!(client.get_config().threshold, 2);
@@ -1375,7 +1660,7 @@ mod test {
     fn test_set_threshold_invalid() {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1]);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &vec![&env, signer1]);
 
         let result = client.try_set_threshold(&admin, &2); // Threshold > signer count
         assert_eq!(result, Err(Ok(Error::InvalidThreshold)));
@@ -1388,7 +1673,7 @@ mod test {
     fn test_transfer_admin() {
         let (env, admin, _contract_id, client) = setup_contract();
         let signer1 = Address::generate(&env);
-        client.initialize(&admin, &1, &vec![&env, signer1]);
+        let _asset = initialize_treasury(&client, &env, &admin, 1, &vec![&env, signer1]);
 
         let new_admin = Address::generate(&env);
         client.transfer_admin(&admin, &new_admin);
@@ -1398,5 +1683,63 @@ mod test {
         // Old admin should fail now
         let result = client.try_set_threshold(&admin, &1);
         assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
+    // =========================================================================
+    // Negative Path Tests (TEST-3)
+    // =========================================================================
+
+    #[test]
+    fn test_reinitialize_returns_already_initialized() {
+        let (env, admin, _contract_id, client) = setup_contract();
+        let signer1 = Address::generate(&env);
+        let signers = Vec::from_array(&env, [signer1.clone()]);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
+
+        // Attempt to re-initialize
+        let result = client.try_initialize(&admin, &1, &signers, &asset);
+        assert_eq!(result, Err(Ok(Error::AlreadyInitialized)));
+    }
+
+    #[test]
+    fn test_deposit_with_zero_amount_returns_invalid_amount() {
+        let (env, admin, _contract_id, client) = setup_contract();
+        let signer1 = Address::generate(&env);
+        let signers = Vec::from_array(&env, [signer1.clone()]);
+        let asset = initialize_treasury(&client, &env, &admin, 1, &signers);
+
+        let depositor = Address::generate(&env);
+        mint_asset(&env, &asset, &depositor, 1_000_000);
+
+        let result = client.try_deposit(&depositor, &0);
+        assert_eq!(result, Err(Ok(Error::InvalidAmount)));
+    }
+
+    #[test]
+    fn test_approve_on_executed_tx_returns_already_executed() {
+        let (env, admin, _contract_id, client) = setup_contract();
+        let signer1 = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let signers = Vec::from_array(&env, [signer1.clone(), signer2.clone()]);
+        let asset = initialize_treasury(&client, &env, &admin, 2, &signers);
+
+        // Deposit and propose
+        mint_asset(&env, &asset, &signer1, 5_000_000);
+        client.deposit(&signer1, &5_000_000);
+        let recipient = Address::generate(&env);
+        let tx_id = client.propose_withdrawal(
+            &signer1,
+            &recipient,
+            &1_000_000,
+            &String::from_str(&env, "test"),
+        );
+
+        // Approve and execute
+        client.approve(&signer2, &tx_id);
+        client.execute(&signer1, &tx_id);
+
+        // Try to approve after execution
+        let result = client.try_approve(&signer1, &tx_id);
+        assert_eq!(result, Err(Ok(Error::AlreadyExecuted)));
     }
 }

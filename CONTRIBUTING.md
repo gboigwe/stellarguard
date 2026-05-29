@@ -9,6 +9,16 @@ Thank you for your interest in building trustless treasury management on Stellar
 - **Backend:** FastAPI or NestJS
 - **Indexing:** Custom Soroban-RPC event listener
 
+## 📦 Required SDK Version
+
+Both the `frontend` and `backend` packages must use the **same** `@stellar/stellar-sdk` version.
+The required version is **`^12.3.0`** (currently `12.3.0`).
+
+> Keeping both packages on the same minor range ensures XDR encoding and event
+> parsing are consistent between the frontend transaction builders and the
+> backend event indexer. Always update both `package.json` files together and
+> verify event parsing when bumping the SDK.
+
 ## 📝 Commit Guidelines (Strict)
 
 We follow a strict **Modular Commit** philosophy to ensure history is readable and revertible.
@@ -55,22 +65,52 @@ We follow a strict **Modular Commit** philosophy to ensure history is readable a
    - Append your GitHub username and Date/Time.
    - *Example:* `- [x] Implement deposit function (@yourname - 2026-02-20 14:00 UTC)`
 
+## 🔀 Branch Naming Convention
+
+Branches must follow the pattern `<type>/<issue-id>-<short-description>`:
+
+| Type | When to use | Example |
+|------|-------------|---------|
+| `feat` | New feature | `feat/BE-1-api-scaffold` |
+| `fix` | Bug fix | `fix/FE-12-wallet-disconnect` |
+| `docs` | Documentation | `docs/DOC-4-readme-setup` |
+| `chore` | Build / config | `chore/DO-5-pr-template` |
+| `refactor` | Refactoring | `refactor/BE-6-db-schema` |
+
+The `<issue-id>` must match the issue number in the relevant `docs/ISSUES-*.md` file (e.g. `BE-1`, `FE-5`, `DO-2`).
+
 ## 🧪 Development Workflow
 
-1. **Fork & Clone**: Fork this repo and clone it locally.
-2. **Branch**: Create a feature branch from `main`.
+Follow these steps from picking an issue to merging:
+
+1. **Pick an issue**: Choose an open issue from `docs/ISSUES-*.md`. Confirm nobody else is actively working on it.
+
+2. **Fork & Clone**: Fork this repo, then clone your fork locally.
    ```bash
-   git checkout -b feat/treasury-deposit
+   git clone https://github.com/<your-username>/StellarGuard.git
+   cd StellarGuard
    ```
-3. **Develop**: Write code following the [Style Guide](STYLE.md).
-4. **Test**:
+
+3. **Branch**: Create a branch from `main` using the naming convention above.
+   ```bash
+   git checkout -b feat/BE-1-api-scaffold
+   ```
+
+4. **Develop**: Write code following the [Style Guide](STYLE.md).
+
+5. **Test**:
    - Contracts: `cd smartcontract && cargo test`
    - Frontend: `cd frontend && npm run test`
-5. **Build Check**:
+
+6. **Build Check**:
    - Contracts: `cargo build --all`
    - Frontend: `npm run build`
-6. **Commit**: Follow the commit guidelines above.
-7. **Pull Request**: Submit a PR with a clear description of your changes.
+
+7. **Commit**: Follow the commit guidelines above.
+
+8. **Update ISSUES-*.md**: Mark your issue complete (see [Issue Tracking](#-issue-tracking) below).
+
+9. **Pull Request**: Open a PR against `main` using the [PR template](.github/PULL_REQUEST_TEMPLATE.md). Link it to the issue with `Closes #<issue-number>` in the PR description so it closes automatically on merge.
 
 ## 🏷️ Labels
 

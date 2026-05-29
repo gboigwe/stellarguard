@@ -7,8 +7,10 @@ import {
   getPublicKey,
   getNetwork,
 } from "@stellar/freighter-api";
+import { classifyError, AppError, isAppError } from "@/lib/errors";
+import { trackEvent, truncateAddress } from "@/lib/analytics";
 
-interface FreighterContextType {
+export interface FreighterContextType {
   address: string | null;
   network: string | null;
   isConnecting: boolean;
@@ -73,11 +75,16 @@ export const FreighterProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setAddress(publicKey);
         const currentNetwork = await getNetwork();
         setNetwork(currentNetwork);
+        trackEvent({
+          name: "wallet_connect",
+          properties: { chain: "stellar", truncatedAddress: truncateAddress(publicKey) },
+        });
       } else {
         setError("User denied access");
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to connect to Freighter");
+    } catch (err) {
+      const classified = classifyError(err);
+      setError(classified.message || "Failed to connect to Freighter");
     } finally {
       setIsConnecting(false);
     }
@@ -87,6 +94,7 @@ export const FreighterProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAddress(null);
     setNetwork(null);
     setError(null);
+    trackEvent({ name: "wallet_disconnect", properties: {} });
   };
 
   const value = {

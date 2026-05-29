@@ -1,62 +1,96 @@
-// TODO: [FE-16] Implement real vote casting with Soroban
+import React from "react";
+import { toast } from "react-hot-toast";
+import { useFreighter } from "@/hooks/useFreighter";
+import { useGovernance } from "@/hooks/useGovernance";
+import { trackEvent } from "@/lib/analytics";
 
 interface VoteButtonProps {
-  /** Proposal ID */
   proposalId: number;
-  /** Vote direction */
   voteFor: boolean;
-  /** Whether the user has already voted */
-  hasVoted?: boolean;
-  /** Whether voting is closed */
-  votingClosed?: boolean;
-  /** Callback when vote is submitted */
-  onVote?: (proposalId: number, voteFor: boolean) => Promise<void>;
+  hasVoted: boolean;
+  votingClosed: boolean;
+  isPending?: boolean;
+  onVoteSuccess?: () => void;
 }
 
-/**
- * Button component for casting votes on governance proposals.
- * Handles loading states, disabled states, and visual feedback.
- */
-export function VoteButton({
+export const VoteButton: React.FC<VoteButtonProps> = ({
   proposalId,
   voteFor,
-  hasVoted = false,
-  votingClosed = false,
-  onVote,
-}: VoteButtonProps) {
-  const isDisabled = hasVoted || votingClosed;
+  hasVoted,
+  votingClosed,
+  isPending = false,
+  onVoteSuccess,
+}) => {
+  const { isConnected } = useFreighter();
+  const { vote, pendingVotes } = useGovernance();
 
-  const label = voteFor ? "✅ Vote For" : "❌ Vote Against";
-  const disabledLabel = hasVoted
-    ? "Already Voted"
-    : votingClosed
-      ? "Voting Closed"
-      : label;
+  // Use per-proposal pending state from the map rather than the global isLoading
+  // flag so that voting on one proposal doesn't disable buttons on others.
+  const isThisVotePending = isPending || pendingVotes.has(proposalId);
 
-  const baseClass = voteFor
-    ? "btn-primary"
-    : "btn-secondary border-red-700 hover:bg-red-900/30";
+  const isDisabled =
+    hasVoted || votingClosed || !isConnected || isThisVotePending;
 
-  const handleClick = async () => {
-    if (isDisabled || !onVote) return;
+  const handleVote = async () => {
+    if (isDisabled) {
+      return;
+    }
 
     try {
-      // TODO: [FE-19] Build XDR transaction for governance vote
-      // const tx = await buildVoteTransaction(proposalId, voteFor);
-      // await signAndSubmit(tx);
-      await onVote(proposalId, voteFor);
-    } catch (err) {
-      console.error("Vote failed:", err);
+      await vote(proposalId, voteFor);
+      trackEvent({
+        name: "proposal_vote",
+        properties: { proposalId: String(proposalId), vote: voteFor ? "for" : "against" },
+      });
+      toast.success(
+        `Vote submitted ${voteFor ? "for" : "against"} proposal #${proposalId}`,
+      );
+      await onVoteSuccess?.();
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to cast vote",
+      );
+      console.error(error);
     }
   };
 
+  const disabledReason = hasVoted
+    ? "You have already voted on this proposal"
+    : votingClosed
+      ? "Voting is closed"
+      : !isConnected
+        ? "Connect your wallet to vote"
+        : isThisVotePending
+          ? "Waiting for vote confirmation"
+          : "";
+
+  const baseLabel = voteFor ? "Vote For" : "Vote Against";
+  const ariaLabel = disabledReason
+    ? `${baseLabel}: ${disabledReason}`
+    : baseLabel;
+  const descId = `vote-desc-${proposalId}-${voteFor ? "for" : "against"}`;
+
   return (
-    <button
-      className={`${baseClass} flex-1 py-3 ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
-      disabled={isDisabled}
-      onClick={handleClick}
-    >
-      {isDisabled ? disabledLabel : label}
-    </button>
+    <>
+      {isDisabled && disabledReason && (
+        <span id={descId} className="sr-only">
+          {disabledReason}
+        </span>
+      )}
+      <button
+        aria-label={ariaLabel}
+        aria-describedby={isDisabled && disabledReason ? descId : undefined}
+        className={`${voteFor ? "btn-primary" : "btn-secondary"} focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900`}
+        disabled={isDisabled}
+        onClick={handleVote}
+        type="button"
+      >
+        {isThisVotePending
+          ? "Submitting..."
+          : voteFor
+            ? "Vote For"
+            : "Vote Against"}
+      </button>
+    </>
   );
-}
+};

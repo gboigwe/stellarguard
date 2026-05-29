@@ -111,8 +111,8 @@ This document tracks all frontend development tasks for the StellarGuard dashboa
 **Labels:** `frontend`, `ui`, `interaction`
 **Description:** Interactive button for approving pending treasury transactions.
 - **Tasks:**
-  - [ ] Create `ApproveButton` component in `TreasuryCard`.
-  - [ ] Show current approval count vs threshold.
+  - [x] Create `ApproveButton` component in `TreasuryCard`. (@gemini - 2026-04-24 18:36 UTC)
+  - [x] Show current approval count vs threshold. (@gemini - 2026-04-24 18:36 UTC)
   - [ ] Handle click → sign approval transaction.
   - [ ] Disable if already approved by current user.
   - [ ] Show "Execute" button when threshold is met.
@@ -184,9 +184,9 @@ This document tracks all frontend development tasks for the StellarGuard dashboa
 - **Tasks:**
   - [ ] Create `/proposals/[id]` dynamic route.
   - [ ] Fetch proposal data from contract.
-  - [ ] Show title, description, proposer, status, dates.
+  - [x] Show title, description, proposer, status, dates. (@gemini - 2026-04-24 18:36 UTC)
   - [ ] Show voting progress (for/against bars).
-  - [ ] Show vote action buttons.
+  - [x] Show vote action buttons. (@gemini - 2026-04-24 18:36 UTC)
   - [ ] Show live vote count updates.
 
 ### Issue #FE-16: Vote Casting UI
@@ -194,9 +194,9 @@ This document tracks all frontend development tasks for the StellarGuard dashboa
 **Labels:** `frontend`, `ui`, `interaction`
 **Description:** Interface for casting votes on proposals.
 - **Tasks:**
-  - [ ] Create `VoteButton` component with For/Against variants.
-  - [ ] Check if user has already voted using `hasVoted()`.
-  - [ ] Disable buttons if voting is closed or already voted.
+  - [x] Create `VoteButton` component with For/Against variants. (@gemini - 2026-04-24 18:36 UTC)
+  - [x] Check if user has already voted using `hasVoted()`. (@gemini - 2026-04-24 18:36 UTC)
+  - [x] Disable buttons if voting is closed or already voted. (@gemini - 2026-04-24 18:36 UTC)
   - [ ] Handle vote transaction signing and submission.
   - [ ] Show success toast after voting.
 

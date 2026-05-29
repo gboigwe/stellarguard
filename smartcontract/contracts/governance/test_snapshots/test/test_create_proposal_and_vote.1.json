@@ -55,10 +55,10 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "symbol": "fund_dev"
+                  "string": "Fund development sprint"
                 },
                 {
-                  "symbol": "dev_work"
+                  "string": "Allocate budget for the next engineering sprint"
                 },
                 {
                   "vec": [
@@ -218,7 +218,7 @@
                         "symbol": "description"
                       },
                       "val": {
-                        "symbol": "dev_work"
+                        "string": "Allocate budget for the next engineering sprint"
                       }
                     },
                     {
@@ -270,7 +270,7 @@
                         "symbol": "title"
                       },
                       "val": {
-                        "symbol": "fund_dev"
+                        "string": "Fund development sprint"
                       }
                     },
                     {
@@ -770,36 +770,6 @@
           "v0": {
             "topics": [
               {
-                "symbol": "log"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "string": "Governance initialized: {} members, {}% quorum"
-                },
-                {
-                  "u32": 3
-                },
-                {
-                  "u32": 50
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
                 "symbol": "fn_return"
               },
               {
@@ -836,10 +806,10 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "symbol": "fund_dev"
+                  "string": "Fund development sprint"
                 },
                 {
-                  "symbol": "dev_work"
+                  "string": "Allocate budget for the next engineering sprint"
                 },
                 {
                   "vec": [
@@ -888,44 +858,16 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "symbol": "fund_dev"
-                },
-                {
-                  "vec": [
-                    {
-                      "symbol": "Funding"
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "log"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "string": "Proposal #{} created by {:?}"
-                },
-                {
-                  "u64": 1
+                  "u32": 1000
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 500000
+                  }
                 }
               ]
             }
@@ -1035,39 +977,6 @@
           "v0": {
             "topics": [
               {
-                "symbol": "log"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "string": "Vote cast on proposal #{}: {:?} voted {}"
-                },
-                {
-                  "u64": 1
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "string": "FOR"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
                 "symbol": "fn_return"
               },
               {
@@ -1141,39 +1050,6 @@
                 },
                 {
                   "bool": true
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "log"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "string": "Vote cast on proposal #{}: {:?} voted {}"
-                },
-                {
-                  "u64": 1
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "string": "FOR"
                 }
               ]
             }
@@ -1282,7 +1158,7 @@
                     "symbol": "description"
                   },
                   "val": {
-                    "symbol": "dev_work"
+                    "string": "Allocate budget for the next engineering sprint"
                   }
                 },
                 {
@@ -1334,7 +1210,7 @@
                     "symbol": "title"
                   },
                   "val": {
-                    "symbol": "fund_dev"
+                    "string": "Fund development sprint"
                   }
                 },
                 {
