@@ -140,7 +140,7 @@ export const TreasuryCard: React.FC<TreasuryCardProps> = ({
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {!executed && (
             <>
               {isReadyToExecute ? (
@@ -196,6 +196,11 @@ export const TreasuryCard: React.FC<TreasuryCardProps> = ({
                 </>
               )}
             </>
+          )}
+          {!canSign && !executed && (
+            <span className="text-[10px] text-gray-500 italic">
+              No signing permission
+            </span>
           )}
         </div>
       </div>

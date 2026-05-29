@@ -166,7 +166,7 @@ export default function TreasuryPage() {
           <button
             className="btn-primary text-sm"
             onClick={() => setShowWithdrawalModal(true)}
-            disabled={isNetworkMismatch || !address || isProposing}
+            disabled={isNetworkMismatch || !address || isProposing || isLoading || (error?.recoverable ?? false)}
           >
             {isProposing ? "Proposing..." : "+ Propose Withdrawal"}
           </button>
