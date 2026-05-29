@@ -4,10 +4,12 @@ import { useEffect, useId, useState } from "react";
 import type { GovernanceProposalAction } from "@/lib/contractData";
 import { ACTION_DESCRIPTIONS } from "@/lib/contractData";
 import { isValidStellarAddress } from "@/lib/stellarAddress";
+import { parseXlmToStroops, sanitizeXlmInput } from "@/lib/formatters";
 
 interface CreateProposalModalProps {
   isOpen: boolean;
   isCreating?: boolean;
+  isWalletConnected?: boolean;
   onClose: () => void;
   onCreate: (data: {
     title: string;
@@ -29,9 +31,12 @@ const ACTIONS: GovernanceProposalAction[] = [
 export function CreateProposalModal({
   isOpen,
   isCreating = false,
+  isWalletConnected,
   onClose,
   onCreate,
 }: CreateProposalModalProps) {
+  const TITLE_MAX = 100;
+  const DESCRIPTION_MAX = 500;
   const titleId = useId();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -60,6 +65,11 @@ export function CreateProposalModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (isWalletConnected === false) {
+      setError("Please connect your wallet first");
+      return;
+    }
 
     if (!title.trim()) {
       setError("Proposal title is required");
@@ -91,14 +101,15 @@ export function CreateProposalModal({
     }
 
     try {
-      const amountBigInt =
-        action === "Funding" ? BigInt(Math.floor(Number(amount) * 10 ** 7)) : BigInt(0);
+      const amountBigInt = action === "Funding" ? parseXlmToStroops(amount) : BigInt(0);
 
       await onCreate({
         title: title.trim(),
         description: description.trim(),
         action,
-        target: normalizedTarget,
+        target: (action === "Funding" || action === "AddMember" || action === "RemoveMember")
+          ? normalizedTarget
+          : "",
         amount: amountBigInt,
       });
 
@@ -153,8 +164,10 @@ export function CreateProposalModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={isCreating}
+              maxLength={TITLE_MAX}
               className="w-full bg-gray-900 border border-stellar-border rounded px-3 py-2 text-sm text-white outline-none focus:border-primary-500 disabled:opacity-50"
             />
+            <p className="text-xs text-gray-500 text-right mt-1">{title.length}/{TITLE_MAX}</p>
           </div>
 
           <div>
@@ -168,8 +181,10 @@ export function CreateProposalModal({
               onChange={(e) => setDescription(e.target.value)}
               disabled={isCreating}
               rows={3}
+              maxLength={DESCRIPTION_MAX}
               className="w-full bg-gray-900 border border-stellar-border rounded px-3 py-2 text-sm text-white outline-none focus:border-primary-500 disabled:opacity-50 resize-none"
             />
+            <p className="text-xs text-gray-500 text-right mt-1">{description.length}/{DESCRIPTION_MAX}</p>
           </div>
 
           <div>
@@ -228,7 +243,7 @@ export function CreateProposalModal({
                 step="0.0000001"
                 min="0"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => setAmount(sanitizeXlmInput(e.target.value))}
                 disabled={isCreating}
                 className="w-full bg-gray-900 border border-stellar-border rounded px-3 py-2 text-sm text-white outline-none focus:border-primary-500 disabled:opacity-50"
               />

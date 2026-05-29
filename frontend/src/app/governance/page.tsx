@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useGovernance } from "@/hooks/useGovernance";
+import { useFreighter } from "@/hooks/useFreighter";
 import type {
   GovernanceProposal,
   GovernanceProposalAction,
@@ -71,6 +72,7 @@ function sortProposals(proposals: GovernanceProposal[], sort: SortKey): Governan
 
 export default function GovernancePage() {
   const { config, getConfig, getProposal, isLoading, error, createProposal } = useGovernance();
+  const { isConnected } = useFreighter();
   const [proposals, setProposals] = useState<GovernanceProposal[]>([]);
   const [statusFilter, setStatusFilter] = useState<"All" | GovernanceProposalStatus>("All");
   const [actionFilter, setActionFilter] = useState<"All" | GovernanceProposalAction>("All");
@@ -157,8 +159,10 @@ export default function GovernancePage() {
           </p>
         </div>
         <button
-          className="btn-primary"
+          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => setShowCreateModal(true)}
+          disabled={!isConnected}
+          title={!isConnected ? "Connect your wallet to create proposals" : undefined}
         >
           + New Proposal
         </button>
@@ -278,6 +282,7 @@ export default function GovernancePage() {
       <CreateProposalModal
         isOpen={showCreateModal}
         isCreating={isCreating}
+        isWalletConnected={isConnected}
         onClose={() => setShowCreateModal(false)}
         onCreate={handleCreateProposal}
       />
