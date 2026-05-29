@@ -96,9 +96,16 @@ export const TreasuryCard: React.FC<TreasuryCardProps> = ({
           <span className="text-white font-bold">{formatXlm(amount)} XLM</span>
         </div>
         {memo && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Memo</span>
-            <span className="text-gray-300 italic">{memo}</span>
+          <div className="flex justify-between items-start gap-4 text-sm">
+            <span className="text-gray-400 shrink-0">Memo</span>
+            {/* Clamp long memos to 2 lines; show full text on hover via title.
+                `break-words` prevents a single long token from bursting the layout. */}
+            <span
+              className="text-gray-300 italic text-right max-w-[60%] line-clamp-2 break-words"
+              title={memo}
+            >
+              {memo}
+            </span>
           </div>
         )}
       </div>
