@@ -553,6 +553,15 @@ export default function TreasuryPage() {
         }
         onConfirm={runExecute}
         onCancel={() => setConfirmExecuteTxId(null)}
+        txDetails={(() => {
+          const tx = transactions.find((t) => t.id === confirmExecuteTxId);
+          if (!tx) return undefined;
+          return {
+            txId: tx.id,
+            amount: `${formatXlm(tx.amount)} XLM`,
+            recipient: formatAddress(tx.to, { startChars: 6, endChars: 4 }),
+          };
+        })()}
       />
     </div>
   );

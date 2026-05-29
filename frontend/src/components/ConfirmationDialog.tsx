@@ -11,6 +11,12 @@ interface ConfirmationDialogProps {
   isConfirming?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Optional transaction details shown so users can verify before confirming */
+  txDetails?: {
+    txId: number;
+    amount: string;   // pre-formatted, e.g. "42.50 XLM"
+    recipient: string; // pre-formatted address
+  };
 }
 
 export function ConfirmationDialog({
@@ -22,6 +28,7 @@ export function ConfirmationDialog({
   isConfirming = false,
   onConfirm,
   onCancel,
+  txDetails,
 }: ConfirmationDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -69,6 +76,24 @@ export function ConfirmationDialog({
         <p id={descriptionId} className="text-sm text-gray-300 mt-2">
           {description}
         </p>
+
+        {/* Transaction details so users can verify before confirming (issue #343) */}
+        {txDetails && (
+          <dl className="mt-4 rounded-lg bg-white/5 border border-white/10 divide-y divide-white/10 text-sm">
+            <div className="flex justify-between px-4 py-2.5">
+              <dt className="text-gray-400">Transaction</dt>
+              <dd className="text-white font-mono">#{txDetails.txId}</dd>
+            </div>
+            <div className="flex justify-between px-4 py-2.5">
+              <dt className="text-gray-400">Amount</dt>
+              <dd className="text-white font-bold">{txDetails.amount}</dd>
+            </div>
+            <div className="flex justify-between px-4 py-2.5">
+              <dt className="text-gray-400">Recipient</dt>
+              <dd className="text-gray-200 font-mono">{txDetails.recipient}</dd>
+            </div>
+          </dl>
+        )}
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
