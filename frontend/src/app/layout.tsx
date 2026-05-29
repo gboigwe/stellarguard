@@ -48,6 +48,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-stellar-darker text-gray-100 selection:bg-stellar-blue/30">
+        <a href="#main-content" className="skip-to-content">
+          Skip to content
+        </a>
         <FreighterProvider>
           <nav className="border-b border-white/5 bg-stellar-darker/60 backdrop-blur-xl sticky top-0 z-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -74,7 +77,7 @@ export default function RootLayout({
             </div>
           </nav>
           
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
             {children}
           </main>
 
